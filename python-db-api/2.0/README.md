@@ -370,11 +370,66 @@ SQL里的NULL在Python里为None。
 
 # 8.可选的错误处理扩展
 
+* `Connection.errorhandler,Cursor.errorhandler`
+    * 带有以下参数
+    ```python
+    errorhandler(connection,cursor,errclass,errorvalue)
+    ```
+
 # 9.可选的2阶段提交扩展
+
+许多数据库支持2阶段提交（two-phase commit（TPC）），允许事务管理跨越多个数据库连接和其他资源。
+
+如果要实现这个功能，下面的方法需要支持，否则应该抛出 `NotSupportedError`.
 
 ## 9.1 TPC事务ID
 
+许多数据库遵循 XA 规范，事务ID由下面的组件构成：
+
+* 一个格式化的ID
+* 一个全局的事务ID
+* 一个分支限定符
+
+对一个特定的全局事务，前2个组件应该对所有资源一样。每个资源应该被分配一个不同的分支限定符。
+
+不同的组件必须满足下面的标准：
+
+* 格式化的ID：非负32位整数
+* 全局事务ID和分支限定符：不超过64个字符的字节string
+
+事务ID由 `.xid()`连接方法创建：
+
+* `.xid(format_id,global_transaction_id,branch_qualifier)`
+    * 返回一个事务ID对象，用来传给 `.tpc_*()` 方法
+    * 如果数据库不支持事务，抛出 `NotSupportedError`
+    * 返回的类型自己定义，要能访问到各个组件。最好使用tuple而不是自定义对象
+
 ## 9.2 TPC连接方法
+
+* `.tpc_begine(xid)`
+    * 给定事务ID开始 TPC事务
+    * 应该在事务之外调用该方法
+    * 在TPC事务中调用commit() 或 rollback()需要抛出 `ProgrammingError` 
+    * 如果数据库不支持事务，抛出 `NotSupportedError`
+
+* `.tpc_prepare()`
+    * TPC事务的第一阶段，如果在TPC事务之外调用该方法，抛出 `ProgrammingError`
+    * 在调用 `.tpc_prepare()`之后，没有语句会真的执行，直到 `tpc_commit()` 或 `tpc_rollback()`调用
+
+* `.tpc_commit([xid])`
+    * 当没有xid参数时，提交上面调用了 `.tpc_prepare()`的事务
+    * 如果在 `.tpc_prepare()`之前调用 `.tpc_commit()`, 那么只有一个阶段
+    * 当带有xid参数，那么提交指定的事务，如果事务不存在，抛出 `ProgrammingError`
+    * 当方法返回时，TpC事务结束
+
+* `.tpc_rollback([xid])`
+    * 回滚事务，可能在 `.tpc_prepare()` 之前或之后调用
+    * 当带有xid参数，那么回滚指定的事务，如果事务不存在，抛出 `ProgrammingError`
+    * 当方法返回时，TpC事务结束
+
+* `.tpc_recover()`
+    * 适合和 `.tpc_commit(xid)`,`.tpc_rollback(xid)`一起使用，返回一个挂起事务的列表
+    * 如果数据库不支持事务恢复，返回空或抛出 `NotSupportedError`
 
 # 10.FAQ
 
