@@ -326,8 +326,47 @@ SQL里的NULL在Python里为None。
 
 # 7.可选的DB API扩展
 
+在DB API2.0的生命周期里，开发者通常扩展了规范要求的一些实现，来提高兼容性和升级的预测。
 
+开发者可以不实现这些扩展属性，如果不支持，应该抛出 `AttributeError` 或者 `NotSupportedError`.
 
+* `Cursor.rownumber`
+    * 提供从0开始的结果集索引，或者为None如果不能决定
+    * 这个索引可以看作序列中（结果集）游标的索引。下一次fetch操作会获取rownumber这么多行数据
+    * 警告信息： "DB-API extension cursor.rownumber used" 
+
+* `Connection.Error,Connection.ProgrammingError`等
+    * 所有通过DB API标准定义的异常类都要暴露给Connection对象作为属性
+    * 在多connection环境中，这些属性简化了错误处理
+    * 警告信息： "DB-API extension connection.<exception> used"
+
+* `Cursor.connection`
+    * 从cursor返回一个只读的connection引用
+    * 这个属性简化了多connection环境的变化代码
+    * 警告信息： "DB-API extension cursor.connection used"
+
+* `Cursor.scroll(value[,mode='relative'])`
+    * 根据mode滚动游标到结果集的新位置
+    * 如果mode是relative(默认)，偏移量就是相对于当前位置，如果是absolute,value代表一个绝对目标位置
+    * 当scroll的位置超出数据集范围需要抛出 `IndexError`
+    * 警告信息： "DB-API extension cursor.scroll() used"
+
+* `Cursor.messages`
+    * 这是个python list对象，每个元素是接口抛出的所有消息的tuple（异常类，异常值）
+    * 警告信息： "DB-API extension cursor.messages used"
+
+* `Connection.messages`    
+    * 和 `Cursor.messages`相似，只是属于Connection
+    
+* `Cursor.next()`
+    * 和 `featchone()`语句相同的语义
+
+* `Cursor.__iter__()`
+    * 返回自己来适配迭代器协议
+
+* `Cursor.lastrowid`
+    * 提供最后修改的行的ROWID，如果没有设置rowid或者数据库不支持，返回None
+    * 如果最后一次执行语句修改了多行，那么语义为undefined
 
 # 8.可选的错误处理扩展
 
