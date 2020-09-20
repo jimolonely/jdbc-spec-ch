@@ -13,7 +13,7 @@
 
 ## 2.1 构造器
 
-通过 connection 对象访问数据库。模块必须提供下面的构造：
+通过 connection 对象访问数据库。实现必须提供下面的构造：
 
 * connect(parameters...)
     * 创建一个数据库连接
@@ -21,7 +21,7 @@
 
 ## 2.2 全局模块
 
-下面的模块必须是全局的：
+下面的实现必须是全局的：
 
 * apiLevel
     * 字符串常量，声明支持的DB API版本
@@ -53,7 +53,7 @@
     
 ## 2.3 异常
 
-通过下面的异常及其子类，模块应该展示所有的错误信息：
+通过下面的异常及其子类，实现应该展示所有的错误信息：
 
 * Warning
     * 重要的警告如插入数据时被截断，必须是Python `StandardError`的子类
@@ -207,11 +207,127 @@ StandardError
     
 # 5.类型对象和构造器
 
+许多数据库需要输入一个特定的格式来绑定操作的参数，例如，输入被定义为DATE列，那么它必须受
+数据库的格式约束。相似的问题同样存在与 "Row ID" 列或打的二进制项（blobs 或 RAW列）.
+现存的问题是Python的参数在 `.execute*()`里是无类型的。当数据库看到Python的字符串对象，
+它不知道该看作一个CHAR列还是BINARY列或者一个DATE。
 
+为了解决这个问题，实现必须提供下面定义的构造来创建对象，持有特定的值。当传给游标的方法，实现
+就可以检测到正确的类型并正确绑定。
 
-# 6.模块作者的实现提示
+实现需要暴露下面的构造和单例
+
+* `Date(year,month,day)`
+    * date类型
+
+* `Time(hour,minute,second)`    
+    * time类型
+
+* `Timestamp(year,month,day,hour,minute,second)`
+    * 时间戳类型
+
+* `DateFromTicks(ticks)`
+    * 从时间戳（逝去的秒数）计算出Date类型
+
+* `TimeFromTicks(ticks)`
+    * 从时间戳（逝去的秒数）计算出Time类型
+
+* `TimestampFromTicks(ticks)`
+    * 从时间戳（逝去的秒数）计算出Timestamp类型
+
+* `Binary(String)`
+    * 构造一个二进制字符串值
+
+* `STRING`类型
+    * 例如CHAR
+
+* `BINARY`类型
+    * 比如：LONG,RAW,BLOB
+
+* `NUMBER`类型
+    * 数字类型
+
+* `DATETIME`类型
+    * date/time列    
+
+SQL里的NULL在Python里为None。
+
+# 6.对开发者的实现提示
+
+* Date/Time对象可以使用 [Python datetime模块](http://docs.python.org/library/datetime.html)
+    对象实现，或者[mxDateTime](http://www.egenix.com/products/python/mxBase/mxDateTime/)
+    包
+* 下面是一个简单的实现：Unix逝去的秒数
+    ```python
+    import time
+    
+    def DateFromTicks(ticks):
+        return Date(*time.localtime(ticks)[:3])
+    
+    def TimeFromTicks(ticks):
+        return Time(*time.localtime(ticks)[3:6])
+    
+    def TimestampFromTicks(ticks):
+        return Timestamp(*time.localtime(ticks)[:6])
+    ```    
+
+* 二进制对象的偏好实现：Python从1.5.2起就存在的buffer type， `Include/bufferobject.h and Objects/bufferobject.c`
+
+* 即使有多个类型对象，类型code也可以产生：
+    ```python
+    class DBAPITypeObject:
+        def __init__(self,*values):
+            self.values = values
+        def __cmp__(self,other):
+            if other in self.values:
+                return 0
+            if other < self.values:
+                return 1
+            else:
+                return -1
+    ```
+
+* 下面是一个异常结构的定义：
+    ```python
+    import exceptions
+    
+    class Error(exceptions.StandardError):
+        pass
+    
+    class Warning(exceptions.StandardError):
+        pass
+    
+    class InterfaceError(Error):
+        pass
+    
+    class DatabaseError(Error):
+        pass
+    
+    class InternalError(DatabaseError):
+        pass
+    
+    class OperationalError(DatabaseError):
+        pass
+    
+    class ProgrammingError(DatabaseError):
+        pass
+    
+    class IntegrityError(DatabaseError):
+        pass
+    
+    class DataError(DatabaseError):
+        pass
+    
+    class NotSupportedError(DatabaseError):
+        pass
+    ```
+    
+
 
 # 7.可选的DB API扩展
+
+
+
 
 # 8.可选的错误处理扩展
 
